@@ -1,0 +1,265 @@
+{
+  "info": {
+    "name": "Login API Tester",
+    "description": "API for automated login testing with browser automation and proxy support",
+    "version": "1.0.0",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Health Check",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/health",
+          "host": ["{{baseUrl}}"],
+          "path": ["health"]
+        },
+        "description": "Check if the API service is running and healthy"
+      }
+    },
+    {
+      "name": "Service Status",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/status",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "status"]
+        },
+        "description": "Get detailed status of the login testing service"
+      }
+    },
+    {
+      "name": "Get Supported Sites",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/sites",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "sites"]
+        },
+        "description": "Retrieve list of supported site login strategies"
+      }
+    },
+    {
+      "name": "Generic Login Test",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"username\": \"{{testUsername}}\",\n  \"password\": \"{{testPassword}}\",\n  \"site\": \"generic\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/login/test",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "login", "test"]
+        },
+        "description": "Test login with generic strategy"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "// Test script for login validation",
+              "const responseText = pm.response.text();",
+              "",
+              "// Check for successful completion",
+              "const successPattern = /\"success\":true/g;",
+              "const hasSuccess = successPattern.test(responseText);",
+              "",
+              "pm.test(\"Login test completed\", function() {",
+              "    pm.expect(responseText).to.include(\"type\":\"complete\");",
+              "});",
+              "",
+              "if (hasSuccess) {",
+              "    pm.test(\"✅ Login successful\", function() {",
+              "        pm.expect(true).to.be.true;",
+              "    });",
+              "}",
+              "",
+              "// Extract session ID for reuse",
+              "const sessionMatch = pm.response.text().match(/\"sessionId\":\"([^\"]+)\"/);",
+              "if (sessionMatch) {",
+              "    pm.environment.set(\"sessionId\", sessionMatch[1]);",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Zscan Login Test",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"username\": \"{{testUsername}}\",\n  \"password\": \"{{testPassword}}\",\n  \"site\": \"zscan\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/login/test",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "login", "test"]
+        },
+        "description": "Test login with Zscan site strategy"
+      }
+    },
+    {
+      "name": "Login with Before/After Actions",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"username\": \"{{testUsername}}\",\n  \"password\": \"{{testPassword}}\",\n  \"targetUrl\": \"https://example.com/login\",\n  \"site\": \"generic\",\n  \"beforeLogin\": [\n    {\n      \"type\": \"navigate\",\n      \"url\": \"https://example.com/login\",\n      \"selector\": \"\",\n      \"value\": \"\",\n      \"timeout\": 5000\n    },\n    {\n      \"type\": \"wait\",\n      \"selector\": \"\",\n      \"value\": \"\",\n      \"timeout\": 2000\n    }\n  ],\n  \"afterLogin\": [\n    {\n      \"type\": \"wait\",\n      \"selector\": \"\",\n      \"value\": \"\",\n      \"timeout\": 3000\n    },\n    {\n      \"type\": \"navigate\",\n      \"url\": \"https://example.com/dashboard\",\n      \"selector\": \"\",\n      \"value\": \"\",\n      \"timeout\": 5000\n    }\n  ]\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/login/test",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "login", "test"]
+        },
+        "description": "Test login with custom before/after actions"
+      }
+    },
+    {
+      "name": "Login with Proxy",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"username\": \"{{testUsername}}\",\n  \"password\": \"{{testPassword}}\",\n  \"targetUrl\": \"https://example.com/login\",\n  \"site\": \"generic\",\n  \"proxy\": {\n    \"enabled\": true,\n    \"protocol\": \"http\",\n    \"host\": \"{{proxyHost}}\",\n    \"port\": {{proxyPort}},\n    \"username\": \"{{proxyUser}}\",\n    \"password\": \"{{proxyPass}}\"\n  }\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/login/test",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "login", "test"]
+        },
+        "description": "Test login with proxy configuration"
+      }
+    },
+    {
+      "name": "Batch Login Test",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"requests\": [\n    {\n      \"username\": \"user1@example.com\",\n      \"password\": \"password1\",\n      \"site\": \"generic\",\n      \"proxy\": {\n        \"enabled\": true,\n        \"protocol\": \"http\",\n        \"host\": \"{{proxyHost}}\",\n        \"port\": {{proxyPort}},\n        \"username\": \"{{proxyUser}}\",\n        \"password\": \"{{proxyPass}}\"\n      }\n    },\n    {\n      \"username\": \"user2@example.com\",\n      \"password\": \"password2\",\n      \"site\": \"zscan\"\n    },\n    {\n      \"username\": \"user3@example.com\",\n      \"password\": \"password3\",\n      \"targetUrl\": \"https://example.com/login\",\n      \"proxy\": {\n        \"enabled\": false\n      }\n    }\n  ],\n  \"maxConcurrent\": 3\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/login/batch",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "login", "batch"]
+        },
+        "description": "Test login for multiple credential sets concurrently"
+      }
+    }
+  ],
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "// Pre-request script",
+          "// Set current timestamp for request tracking",
+          "pm.environment.set(\"requestTimestamp\", new Date().toISOString());"
+        ]
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:3000",
+      "type": "string"
+    },
+    {
+      "key": "testUsername",
+      "value": "test@example.com",
+      "type": "string"
+    },
+    {
+      "key": "testPassword",
+      "value": "password123",
+      "type": "string"
+    },
+    {
+      "key": "proxyHost",
+      "value": "proxy.example.com",
+      "type": "string"
+    },
+    {
+      "key": "proxyPort",
+      "value": "8080",
+      "type": "string"
+    },
+    {
+      "key": "proxyUser",
+      "value": "proxyuser",
+      "type": "string"
+    },
+    {
+      "key": "proxyPass",
+      "value": "proxypass",
+      "type": "string"
+    }
+  ]
+}

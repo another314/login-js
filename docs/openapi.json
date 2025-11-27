@@ -1,0 +1,487 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Login API Tester",
+    "description": "API for automated login testing with browser automation, proxy support, and site-specific strategies",
+    "version": "1.0.0",
+    "contact": {
+      "name": "API Support"
+    }
+  },
+  "servers": [
+    {
+      "url": "http://localhost:3000",
+      "description": "Development server"
+    }
+  ],
+  "paths": {
+    "/health": {
+      "get": {
+        "summary": "Health Check",
+        "description": "Check if the API service is running and healthy",
+        "tags": ["Health"],
+        "responses": {
+          "200": {
+            "description": "Service is healthy",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/status": {
+      "get": {
+        "summary": "Service Status",
+        "description": "Get detailed status of the login testing service",
+        "tags": ["Status"],
+        "responses": {
+          "200": {
+            "description": "Service status retrieved successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatusResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/sites": {
+      "get": {
+        "summary": "Get Supported Sites",
+        "description": "Retrieve list of supported site login strategies",
+        "tags": ["Sites"],
+        "responses": {
+          "200": {
+            "description": "Supported sites retrieved successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SitesResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/docs": {
+      "get": {
+        "summary": "API Documentation",
+        "description": "Get detailed API documentation",
+        "tags": ["Documentation"],
+        "responses": {
+          "200": {
+            "description": "API documentation retrieved successfully"
+          }
+        }
+      }
+    },
+    "/api/login/test": {
+      "post": {
+        "summary": "Test Single Login",
+        "description": "Test login for a single set of credentials with real-time progress updates via Server-Sent Events",
+        "tags": ["Login Testing"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoginRequest"
+              },
+              "examples": {
+                "generic": {
+                  "summary": "Generic login with custom actions",
+                  "value": {
+                    "username": "test@example.com",
+                    "password": "password123",
+                    "targetUrl": "https://example.com/login",
+                    "site": "generic"
+                  }
+                },
+                "zscan": {
+                  "summary": "Zscan site login",
+                  "value": {
+                    "username": "testuser",
+                    "password": "testpassword123",
+                    "site": "zscan"
+                  }
+                },
+                "withBeforeAfter": {
+                  "summary": "Login with before/after actions",
+                  "value": {
+                    "username": "test@example.com",
+                    "password": "password123",
+                    "targetUrl": "https://example.com/login",
+                    "site": "generic",
+                    "beforeLogin": [
+                      {
+                        "type": "navigate",
+                        "url": "https://example.com/login",
+                        "selector": "",
+                        "value": "",
+                        "timeout": 5000
+                      }
+                    ],
+                    "afterLogin": [
+                      {
+                        "type": "wait",
+                        "selector": "",
+                        "value": "",
+                        "timeout": 3000
+                      }
+                    ]
+                  }
+                },
+                "withProxy": {
+                  "summary": "Login with proxy configuration",
+                  "value": {
+                    "username": "test@example.com",
+                    "password": "password123",
+                    "targetUrl": "https://example.com/login",
+                    "proxy": {
+                      "enabled": true,
+                      "protocol": "http",
+                      "host": "proxy.example.com",
+                      "port": 8080,
+                      "username": "proxyuser",
+                      "password": "proxypass"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "responses": {
+            "200": {
+              "description": "Login test started successfully",
+              "content": {
+                "text/plain": {
+                  "schema": {
+                    "type": "string"
+                  },
+                  "example": "data: {\"type\":\"status\",\"message\":\"Initializing browser session...\"}\n\ndata: {\"type\":\"complete\",\"result\":{\"success\":true,\"sessionId\":\"uuid-1234\"}}\n\n"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/login/batch": {
+      "post": {
+        "summary": "Test Multiple Logins",
+        "description": "Test login for multiple credential sets concurrently with real-time progress updates",
+        "tags": ["Login Testing"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BatchLoginRequest"
+              },
+              "examples": {
+                "multipleSites": {
+                  "summary": "Multiple sites with different configurations",
+                  "value": {
+                    "requests": [
+                      {
+                        "username": "user1@example.com",
+                        "password": "password1",
+                        "site": "generic",
+                        "proxy": {
+                          "enabled": true,
+                          "protocol": "http",
+                          "host": "proxy1.example.com",
+                          "port": 8080,
+                          "username": "proxyuser1",
+                          "password": "proxypass1"
+                        }
+                      },
+                      {
+                        "username": "user2@example.com",
+                        "password": "password2",
+                        "site": "zscan"
+                      },
+                      {
+                        "username": "user3@example.com",
+                        "password": "password3",
+                        "targetUrl": "https://example.com/login",
+                        "proxy": {
+                          "enabled": false
+                        }
+                      }
+                    ],
+                    "maxConcurrent": 3
+                  }
+                }
+              }
+            }
+          },
+          "responses": {
+            "200": {
+              "description": "Batch login test started successfully",
+              "content": {
+                "text/plain": {
+                  "schema": {
+                    "type": "string"
+                  },
+                  "example": "data: {\"type\":\"status\",\"message\":\"Starting batch test with 3 requests...\"}\n\ndata: {\"type\":\"progress\",\"result\":{\"index\":0,\"success\":true}}\n\ndata: {\"type\":\"complete\",\"result\":{\"totalRequests\":3,\"successfulRequests\":3}}\n\n"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "LoginRequest": {
+        "type": "object",
+        "required": ["username", "password"],
+        "properties": {
+          "username": {
+            "type": "string",
+            "description": "Login username or email",
+            "example": "test@example.com"
+          },
+          "password": {
+            "type": "string",
+            "description": "Login password",
+            "example": "password123"
+          },
+          "targetUrl": {
+            "type": "string",
+            "description": "Target login URL (optional if site is specified)",
+            "example": "https://example.com/login"
+          },
+          "site": {
+            "type": "string",
+            "description": "Site login strategy to use (generic, zscan, etc.)",
+            "example": "generic"
+          },
+          "beforeLogin": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ElementAction"
+            },
+            "description": "Actions to execute before login form interaction"
+          },
+          "afterLogin": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ElementAction"
+            },
+            "description": "Actions to execute after successful login"
+          },
+          "proxy": {
+            "$ref": "#/components/schemas/ProxyConfig"
+          },
+          "options": {
+            "$ref": "#/components/schemas/LoginOptions"
+          }
+        }
+      },
+      "ElementAction": {
+        "type": "object",
+        "required": ["type", "selector", "value", "timeout", "url"],
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": ["navigate", "click", "input", "wait"],
+            "description": "Action type"
+          },
+          "selector": {
+            "type": "string",
+            "description": "CSS selector for element interaction"
+          },
+          "value": {
+            "type": "string",
+            "description": "Value to input (for input actions)"
+          },
+          "timeout": {
+            "type": "number",
+            "description": "Timeout in milliseconds"
+          },
+          "url": {
+            "type": "string",
+            "description": "URL to navigate to (for navigate actions)"
+          }
+        }
+      },
+      "ProxyConfig": {
+        "type": "object",
+        "properties": {
+          "enabled": {
+            "type": "boolean",
+            "description": "Enable/disable proxy usage"
+          },
+          "protocol": {
+            "type": "string",
+            "enum": ["http", "https", "socks5"],
+            "description": "Proxy protocol"
+          },
+          "host": {
+            "type": "string",
+            "description": "Proxy server host"
+          },
+          "port": {
+            "type": "number",
+            "description": "Proxy server port"
+          },
+          "username": {
+            "type": "string",
+            "description": "Proxy authentication username"
+          },
+          "password": {
+            "type": "string",
+            "description": "Proxy authentication password"
+          }
+        }
+      },
+      "LoginOptions": {
+        "type": "object",
+        "properties": {
+          "headless": {
+            "type": "boolean",
+            "description": "Run browser in headless mode"
+          },
+          "timeout": {
+            "type": "number",
+            "description": "Request timeout in milliseconds"
+          },
+          "userAgent": {
+            "type": "string",
+            "description": "Custom user agent string"
+          },
+          "viewport": {
+            "$ref": "#/components/schemas/Viewport"
+          }
+        }
+      },
+      "Viewport": {
+        "type": "object",
+        "properties": {
+          "width": {
+            "type": "number",
+            "description": "Browser viewport width"
+          },
+          "height": {
+            "type": "number",
+            "description": "Browser viewport height"
+          }
+        }
+      },
+      "BatchLoginRequest": {
+        "type": "object",
+        "required": ["requests"],
+        "properties": {
+          "requests": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/LoginRequest"
+            },
+            "description": "Array of login requests to test"
+          },
+          "maxConcurrent": {
+            "type": "number",
+            "minimum": 1,
+            "maximum": 10,
+            "description": "Maximum concurrent requests"
+          }
+        }
+      },
+      "HealthResponse": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "example": "healthy"
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "uptime": {
+            "type": "number"
+          },
+          "memory": {
+            "type": "object"
+          },
+          "proxyEnabled": {
+            "type": "boolean"
+          },
+          "proxyCount": {
+            "type": "number"
+          }
+        }
+      },
+      "StatusResponse": {
+        "type": "object",
+        "properties": {
+          "activeSessions": {
+            "type": "number"
+          },
+          "status": {
+            "type": "string"
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "SitesResponse": {
+        "type": "object",
+        "properties": {
+          "supportedSites": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "message": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "securitySchemes": {
+      "ApiKeyAuth": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "X-API-Key"
+      }
+    }
+  },
+  "tags": [
+    {
+      "name": "Health",
+      "description": "Service health monitoring"
+    },
+    {
+      "name": "Status",
+      "description": "Service status information"
+    },
+    {
+      "name": "Sites",
+      "description": "Supported site strategies"
+    },
+    {
+      "name": "Login Testing",
+      "description": "Login automation and testing"
+    },
+    {
+      "name": "Documentation",
+      "description": "API documentation"
+    }
+  ]
+}
