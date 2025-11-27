@@ -16,13 +16,16 @@ export interface LoginRequest {
   beforeLogin?: ElementAction[];
   afterLogin?: ElementAction[];
   options?: {
-    headless?: boolean;
+    headless?: boolean | 'new' | 'old';
     timeout?: number;
     userAgent?: string;
     viewport?: {
       width: number;
       height: number;
     };
+    // Browser profile options to avoid rate limiting
+    isolateProfile?: boolean; // default: true
+    randomUserAgent?: boolean; // default: true
   };
 }
 

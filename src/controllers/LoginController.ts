@@ -57,12 +57,12 @@ export class LoginController {
       const validatedData = LoginRequestSchema.parse(req.body);
       const { username, password, targetUrl, site, beforeLogin, afterLogin, apiPattern, proxy, options } = validatedData;
 
-      console.log(`data: ${JSON.stringify({ type: 'status', message: 'Initializing browser session...' })}\n\n`);
+      console.log(`Initializing browser session...`);
 
       // Determine login strategy
       const siteStrategy = site ? SiteFactory.getSiteStrategy(site) : SiteFactory.getSiteStrategy('generic');
 
-      console.log(`data: ${JSON.stringify({ type: 'status', message: `Using site strategy: ${siteStrategy.config.name}` })}\n\n`);
+      console.log(`Using site strategy: ${siteStrategy.config.name}`);
 
       const loginRequest = {
         username,
@@ -77,22 +77,19 @@ export class LoginController {
 
       const session = await this.browserService.createSession(loginRequest);
 
-      console.log(`data: ${JSON.stringify({ type: 'status', message: `Session created: ${session.id}` })}\n\n`);
+      console.log(`Session created: ${session.id}`);
 
       // Generate actions using site strategy
       const generatedActions = siteStrategy.generateLoginActions(loginRequest);
       const apiPatterns = siteStrategy.getApiPatterns();
 
-      console.log(`data: ${JSON.stringify({ type: 'status', message: 'Executing login actions...' })}\n\n`);
+      console.log(`Executing login actions...`);
 
       const { apiResponses } = await this.browserService.executeActions(
         session,
         generatedActions,
         apiPattern || apiPatterns.length > 0 ? apiPatterns[0] : undefined
       );
-
-      // console.log(`data: ${JSON.stringify({ type: 'status', message: 'Capturing screenshot...' })}\n\n`);
-      // const screenshot = await this.browserService.takeScreenshot(session);
 
       const executionTime = Date.now() - startTime;
 
@@ -105,12 +102,12 @@ export class LoginController {
         message: loginSuccess ? 'Login successful' : 'Login verification failed',
         site: siteStrategy.config.name,
         apiResponses,
-        // screenshot,
         executionTime,
         timestamp: new Date().toISOString()
       };
 
-      res.write(`data: ${JSON.stringify({ type: 'complete', result })}\n\n`);
+      // Return single JSON response instead of streaming
+      res.json(result);
 
       await this.browserService.closeSession(session.id);
 
@@ -125,9 +122,8 @@ export class LoginController {
         timestamp: new Date().toISOString()
       };
 
-      console.log(`data: ${JSON.stringify({ type: 'error', result: errorResult })}\n\n`);
-    } finally {
-      res.end();
+      // Return single JSON error response
+      res.status(500).json(errorResult);
     }
   }
 

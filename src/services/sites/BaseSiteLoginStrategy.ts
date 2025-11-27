@@ -47,6 +47,14 @@ export abstract class BaseSiteLoginStrategy implements SiteLoginStrategy {
       });
     }
 
+    actions.push({
+      type: 'wait',
+      selector: undefined,
+      value: undefined,
+      timeout: 500,
+      url: undefined
+    });
+
     // Try to click submit button
     for (const selector of this.config.selectors.submit) {
       actions.push({

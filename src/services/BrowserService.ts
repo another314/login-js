@@ -12,6 +12,25 @@ export class BrowserService {
     this.initializeProxies(proxies);
   }
 
+  private getRandomUserAgent(): string {
+    const userAgentList: Array<string> = [
+      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36',
+      'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36',
+      'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36',
+      'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) Gecko/20100101 Firefox/120.0',
+      'Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:109.0) Gecko/20100101 Firefox/120.0',
+      'Mozilla/5.0 (X11; Linux x86_64; rv:109.0) Gecko/20100101 Firefox/120.0'
+    ] as const;
+
+    const randomIndex = Math.floor(Math.random() * userAgentList.length);
+    const selectedAgent = userAgentList[randomIndex];
+
+    return selectedAgent as string;
+  }
+
   private initializeProxies(proxyStrings: string[]): void {
     this.availableProxies = proxyStrings.map(proxyString => {
       const parts = proxyString.split(':');
@@ -72,18 +91,33 @@ export class BrowserService {
         browserOptions.executablePath = chromePath;
       }
 
+      // Create unique user data directory for each session to avoid rate limiting
+      if (request.options?.isolateProfile !== false) {
+        const userDataDir = `/tmp/chrome-profile-${sessionId}`;
+        browserOptions.args.push(`--user-data-dir=${userDataDir}`);
+      }
+
+      // Add random user agent to further avoid detection
+      let selectedUserAgent: string | undefined;
+
       if (request.options?.userAgent) {
-        browserOptions.args.push(`--user-agent=${request.options.userAgent}`);
+        selectedUserAgent = request.options.userAgent;
+      } else if (request.options?.randomUserAgent !== false) {
+        selectedUserAgent = this.getRandomUserAgent();
+      }
+
+      if (selectedUserAgent) {
+        browserOptions.args.push(`--user-agent=${selectedUserAgent}`);
       }
 
       const browser = await puppeteer.launch(browserOptions);
       const page = await browser.newPage();
 
-      if (request.options?.viewport) {
-        await page.setViewport(request.options.viewport);
-      } else {
-        await page.setViewport({ width: 1920, height: 1080 });
-      }
+      // if (request.options?.viewport) {
+      //   await page.setViewport(request.options.viewport);
+      // } else {
+      //   await page.setViewport({ width: 1920, height: 1080 });
+      // }
 
       // Apply proxy using puppeteer-page-proxy if enabled and specified
       if (proxy && proxy.enabled && proxy.host && proxy.port) {
@@ -188,6 +222,30 @@ export class BrowserService {
       }
     }
 
+    // Wait for API responses to be captured before returning
+    if (apiPattern && apiResponses.length === 0) {
+      // If we're expecting API responses but haven't captured any yet, wait a bit longer
+      console.log('Waiting for API responses...');
+
+      let waitCount = 0;
+      const maxWaitTime = 15000; // 15 seconds max wait
+      const checkInterval = 1000; // Check every 1 second
+
+      while (apiResponses.length === 0 && waitCount < maxWaitTime) {
+        await new Promise(resolve => setTimeout(resolve, checkInterval));
+        waitCount += checkInterval;
+
+        if (waitCount % 3000 === 0) { // Log every 3 seconds
+          console.log(`Still waiting for API responses... (${waitCount/1000}s elapsed)`);
+        }
+      }
+
+      if (apiResponses.length === 0) {
+        console.warn('No API responses captured after waiting period');
+      } else {
+        console.log(`API responses captured: ${apiResponses.length}`);
+      }
+    }
 
     return { apiResponses };
   }
@@ -221,6 +279,15 @@ export class BrowserService {
 
       session.isActive = false;
       this.activeSessions.delete(sessionId);
+
+      // Clean up user data directory
+      try {
+        const fs = await import('fs/promises');
+        const userDataDir = `/tmp/chrome-profile-${sessionId}`;
+        await fs.rm(userDataDir, { recursive: true, force: true });
+      } catch (cleanupError) {
+        console.warn(`Failed to cleanup user data directory for session ${sessionId}:`, cleanupError);
+      }
     }
   }
 
