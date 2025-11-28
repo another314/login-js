@@ -27,7 +27,7 @@ export class ZscanLoginStrategy extends BaseSiteLoginStrategy {
     ],
     afterLogin: [
     ],
-    waitAfterLogin: 5000,
+    waitAfterLogin: 4000,
     successIndicators: [],
     apiPatterns: ['/zero/api/login']
   };

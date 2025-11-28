@@ -37,6 +37,25 @@ export function createApp(): Express {
     await loginController.getStatus(req, res);
   }));
 
+  app.get('/api/logs', asyncHandler(async (req, res) => {
+    try {
+      const { logger } = await import('./utils/logger.js');
+      const lines = parseInt(req.query['lines'] as string) || 100;
+      const recentLogs = logger.getRecentLogs(lines);
+      res.json({
+        success: true,
+        logs: recentLogs,
+        logFilePath: logger.getLogFilePath(),
+        totalLogs: recentLogs.length
+      });
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        message: error instanceof Error ? error.message : 'Failed to retrieve logs'
+      });
+    }
+  }));
+
   app.post('/api/login/test', asyncHandler(async (req, res) => {
     await loginController.testLogin(req, res);
   }));
@@ -168,17 +187,20 @@ export function createApp(): Express {
 
   app.use(errorHandler);
 
-  process.on('SIGTERM', async () => {
-    console.log('SIGTERM received, cleaning up...');
+  // Set up signal handlers only once
+  const cleanup = async (signal: string) => {
+    console.log(`${signal} received, cleaning up...`);
     await loginController.cleanup();
     process.exit(0);
-  });
+  };
 
-  process.on('SIGINT', async () => {
-    console.log('SIGINT received, cleaning up...');
-    await loginController.cleanup();
-    process.exit(0);
-  });
+  // Remove existing listeners to prevent memory leaks
+  process.removeAllListeners('SIGTERM');
+  process.removeAllListeners('SIGINT');
+
+  // Add new listeners
+  process.on('SIGTERM', () => cleanup('SIGTERM'));
+  process.on('SIGINT', () => cleanup('SIGINT'));
 
   return app;
 }

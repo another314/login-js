@@ -1,5 +1,4 @@
 import puppeteer from 'puppeteer';
-import useProxy from 'puppeteer-page-proxy';
 import type { ProxyConfig, BrowserSession, LoginRequest, ElementAction, ApiResponse } from '../types/index.js';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -81,7 +80,12 @@ export class BrowserService {
           '--disable-dev-shm-usage',
           '--disable-accelerated-2d-canvas',
           '--disable-gpu',
-          '--window-size=1920,1080'
+          '--window-size=1920,1080',
+          '--blink-settings=imagesEnabled=false',
+          '--disable-images',
+          '--disable-background-timer-throttling',
+          '--disable-backgrounding-occluded-windows',
+          '--disable-renderer-backgrounding'
         ]
       };
 
@@ -95,6 +99,12 @@ export class BrowserService {
       if (request.options?.isolateProfile !== false) {
         const userDataDir = `/tmp/chrome-profile-${sessionId}`;
         browserOptions.args.push(`--user-data-dir=${userDataDir}`);
+      }
+
+      // Add proxy server to launch args if enabled and specified
+      if (proxy && proxy.enabled && proxy.host && proxy.port) {
+        browserOptions.args.push(`--proxy-server=${proxy.protocol}://${proxy.host}:${proxy.port}`);
+        console.log(`Proxy server configured: ${proxy.protocol}://${proxy.host}:${proxy.port}`);
       }
 
       // Add random user agent to further avoid detection
@@ -113,27 +123,27 @@ export class BrowserService {
       const browser = await puppeteer.launch(browserOptions);
       const page = await browser.newPage();
 
-      // if (request.options?.viewport) {
-      //   await page.setViewport(request.options.viewport);
-      // } else {
-      //   await page.setViewport({ width: 1920, height: 1080 });
-      // }
+      // Set viewport
+      if (request.options?.viewport) {
+        await page.setViewport(request.options.viewport);
+      } else {
+        await page.setViewport({ width: 1920, height: 1080 });
+      }
 
-      // Apply proxy using puppeteer-page-proxy if enabled and specified
-      if (proxy && proxy.enabled && proxy.host && proxy.port) {
-        const proxyUrl = `${proxy.protocol}://`;
-        const authString = (proxy.username && proxy.password)
-          ? `${proxy.username}:${proxy.password}@`
-          : '';
-        const proxyString = `${proxyUrl}${authString}${proxy.host}:${proxy.port}`;
-
+      // Authenticate proxy on the page if username and password are provided
+      if (proxy && proxy.enabled && proxy.host && proxy.port && proxy.username && proxy.password) {
         try {
-          await useProxy(page, proxyString);
-          console.log(`Proxy enabled: ${proxy.host}:${proxy.port}`);
+          await page.authenticate({
+            username: proxy.username,
+            password: proxy.password
+          });
+          console.log(`Proxy authenticated for user: ${proxy.username}`);
         } catch (proxyError) {
-          console.warn(`Failed to apply proxy: ${proxyError instanceof Error ? proxyError.message : 'Unknown error'}`);
-          // Continue without proxy if it fails
+          console.warn(`Failed to authenticate proxy: ${proxyError instanceof Error ? proxyError.message : 'Unknown error'}`);
+          // Continue without proxy authentication if it fails
         }
+      } else if (proxy && proxy.enabled && proxy.host && proxy.port) {
+        console.log(`Proxy enabled without authentication: ${proxy.host}:${proxy.port}`);
       } else {
         console.log(`Proxy disabled or not configured. Running without proxy.`);
       }
