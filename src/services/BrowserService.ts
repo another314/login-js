@@ -178,7 +178,7 @@ export class BrowserService {
     }
   }
 
-  async executeActions(session: BrowserSession, actions: ElementAction[], apiPattern?: string): Promise<{ apiResponses: ApiResponse[] }> {
+  async executeActions(session: BrowserSession, actions: ElementAction[], apiPattern?: string): Promise<{ apiResponses: ApiResponse[], afterLoginActions: ElementAction[] }> {
     const { page } = session;
     const apiResponses: ApiResponse[] = [];
 
@@ -190,12 +190,7 @@ export class BrowserService {
       await page.setRequestInterception(true);
 
       page.on('request', (request: any) => {
-        const url = request.url();
-        if (url.includes(apiPattern)) {
-          request.continue();
-        } else {
-          request.continue();
-        }
+        request.continue();
       });
 
       page.on('response', async (response: any) => {
@@ -235,7 +230,27 @@ export class BrowserService {
       });
     }
 
+    // Separate actions into different phases
+    const beforeLoginActions: ElementAction[] = [];
+    const loginActions: ElementAction[] = [];
+    const afterLoginActions: ElementAction[] = [];
+
     for (const action of actions) {
+      // Assume login actions are navigate/input/click/wait, after-login are bookmark click and other post-login actions
+      if (action.type === 'navigate' || action.type === 'input' || action.type === 'click' || action.type === 'wait') {
+        // Check if this is an after-login action by looking at selector patterns
+        if (action.selector && action.selector.includes('bookmark')) {
+          afterLoginActions.push(action);
+        } else {
+          loginActions.push(action);
+        }
+      } else {
+        afterLoginActions.push(action);
+      }
+    }
+
+    // Execute all login actions (beforeLogin + login actions)
+    for (const action of [...beforeLoginActions, ...loginActions]) {
       try {
         switch (action.type) {
           case 'navigate':
@@ -295,7 +310,136 @@ export class BrowserService {
       }
     }
 
-    return { apiResponses };
+    return { apiResponses, afterLoginActions };
+  }
+
+  async executeAfterLoginActions(session: BrowserSession, afterLoginActions: ElementAction[], apiPatterns?: string[]): Promise<ApiResponse[]> {
+    const { page } = session;
+    const apiResponses: ApiResponse[] = [];
+
+    if (!page) {
+      throw new Error('Browser page not initialized');
+    }
+
+    if (afterLoginActions.length > 0) {
+      console.log(`Executing ${afterLoginActions.length} after-login actions...`);
+
+      // Set up response capture for additional API calls
+      page.on('response', async (response: any) => {
+        const url = response.url();
+        if (url.includes('/zero/api/user') || (apiPatterns && apiPatterns.some(pattern => url.includes(pattern)))) {
+          const apiResponse = {
+            url: url,
+            method: response.request().method(),
+            status: response.status(),
+            headers: response.headers(),
+            body: null,
+            timestamp: new Date().toISOString()
+          };
+
+          // Try to capture response body
+          try {
+            const contentType = response.headers()['content-type'] || '';
+            if (contentType.includes('application/json') ||
+                contentType.includes('text/') ||
+                !contentType) {
+
+              const responseText = await response.text();
+              if (responseText) {
+                try {
+                  apiResponse.body = JSON.parse(responseText);
+                } catch {
+                  apiResponse.body = responseText;
+                }
+              }
+            }
+          } catch (error) {
+            console.warn(`Failed to capture response body for ${url}:`, error);
+          }
+
+          apiResponses.push(apiResponse);
+        }
+      });
+
+      for (const action of afterLoginActions) {
+        try {
+          switch (action.type) {
+            case 'click':
+              if (action.selector) {
+                await page.waitForSelector(action.selector, { timeout: action.timeout || 10000 });
+                await page.click(action.selector);
+              }
+              break;
+
+            case 'input':
+              if (action.selector && action.value) {
+                await page.waitForSelector(action.selector, { timeout: action.timeout || 10000 });
+                await page.type(action.selector, action.value);
+              }
+              break;
+
+            case 'navigate':
+              if (action.url) {
+                await page.goto(action.url, {
+                  waitUntil: 'domcontentloaded',
+                  timeout: Math.min(action.timeout || 10000, 10000)
+                });
+              }
+              break;
+
+            case 'wait':
+              await new Promise(resolve => setTimeout(resolve, Math.min(action.timeout || 300, 1000)));
+              break;
+          }
+        } catch (error) {
+          console.warn(`Failed to execute after-login action ${action.type}: ${error instanceof Error ? error.message : 'Unknown error'}`);
+          // Continue with other actions instead of failing completely
+        }
+      }
+    }
+
+    // Wait for additional API responses to be captured
+    console.log('Waiting for API responses after after-login actions...');
+
+    let waitCount = 0;
+    const maxWaitTime = 15000; // 15 seconds max wait for after-login API responses
+    const checkInterval = 1000; // Check every 1 second
+    const initialResponseCount = apiResponses.length;
+
+    while (waitCount < maxWaitTime) {
+      await new Promise(resolve => setTimeout(resolve, checkInterval));
+      waitCount += checkInterval;
+
+      if (waitCount % 3000 === 0) { // Log every 3 seconds
+        console.log(`Still waiting for after-login API responses... (${waitCount/1000}s elapsed, captured: ${apiResponses.length - initialResponseCount})`);
+      }
+
+      // Check if we've captured new API responses (specifically looking for /zero/api/user)
+      if (apiResponses.length > initialResponseCount) {
+        const hasUserApiResponse = apiResponses.slice(initialResponseCount).some(response =>
+          response.url.includes('/zero/api/user')
+        );
+
+        if (hasUserApiResponse) {
+          console.log(`After-login API responses captured: ${apiResponses.length - initialResponseCount} (including /zero/api/user)`);
+          break;
+        }
+      }
+    }
+
+    if (apiResponses.length === initialResponseCount) {
+      console.warn('No additional API responses captured after after-login actions');
+    } else {
+      const userApiResponses = apiResponses.slice(initialResponseCount).filter(response =>
+        response.url.includes('/zero/api/user')
+      );
+
+      if (userApiResponses.length === 0) {
+        console.warn('No /zero/api/user responses captured after after-login actions');
+      }
+    }
+
+    return apiResponses;
   }
 
   async takeScreenshot(session: BrowserSession): Promise<string> {

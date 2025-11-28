@@ -30,11 +30,14 @@ export interface LoginRequest {
 }
 
 export interface ElementAction {
-  type: 'click' | 'input' | 'wait' | 'navigate';
+  type: 'click' | 'input' | 'wait' | 'navigate' | 'api';
   selector: string | undefined;
   value: string | undefined;
   timeout: number | undefined;
   url: string | undefined;
+  apiUrl?: string;
+  apiMethod?: 'GET' | 'POST' | 'PUT' | 'DELETE';
+  apiHeaders?: Record<string, string>;
 }
 
 export interface ApiResponse {

@@ -88,7 +88,7 @@ export class LoginController {
 
       logger.info(`Executing ${generatedActions.length} login actions...`);
 
-      const { apiResponses } = await this.browserService.executeActions(
+      const { apiResponses, afterLoginActions } = await this.browserService.executeActions(
         session,
         generatedActions,
         apiPattern || apiPatterns.length > 0 ? apiPatterns[0] : undefined
@@ -99,10 +99,25 @@ export class LoginController {
         logger.logApiCapture(response.url, response.method, response.status);
       });
 
-      const executionTime = Date.now() - startTime;
-
       // Validate login result using site strategy
-      const loginSuccess = siteStrategy.validateLoginResult(apiResponses);
+      const validationSuccess = siteStrategy.validateLoginResult(apiResponses);
+      const loginSuccess = validationSuccess;
+
+      // Only execute after-login actions if login was successful
+      if (loginSuccess && afterLoginActions.length > 0) {
+        console.log('Login validation successful, executing after-login actions...');
+        const additionalApiResponses = await this.browserService.executeAfterLoginActions(session, afterLoginActions, apiPatterns);
+
+        // Add new API responses to the existing ones
+        apiResponses.push(...additionalApiResponses);
+
+        // Log additional API responses captured
+        additionalApiResponses.forEach(response => {
+          logger.logApiCapture(response.url, response.method, response.status);
+        });
+      }
+
+      const executionTime = Date.now() - startTime;
 
       const result = {
         success: loginSuccess,
@@ -189,17 +204,27 @@ export class LoginController {
           const generatedActions = siteStrategy.generateLoginActions(requestData);
           const apiPatterns = siteStrategy.getApiPatterns();
 
-          const { apiResponses } = await this.browserService.executeActions(
+          const { apiResponses, afterLoginActions } = await this.browserService.executeActions(
             session,
             generatedActions,
             requestData.apiPattern || (apiPatterns.length > 0 ? apiPatterns[0] : undefined)
           );
 
+          // Validate login result using site strategy
+          const validationSuccess = siteStrategy.validateLoginResult(apiResponses);
+          const loginSuccess = validationSuccess;
+
+          // Only execute after-login actions if login was successful
+          if (loginSuccess && afterLoginActions.length > 0) {
+            console.log('Login validation successful, executing after-login actions...');
+            const additionalApiResponses = await this.browserService.executeAfterLoginActions(session, afterLoginActions, apiPatterns);
+
+            // Add new API responses to the existing ones
+            apiResponses.push(...additionalApiResponses);
+          }
+
           const screenshot = await this.browserService.takeScreenshot(session);
           const executionTime = Date.now() - startTime;
-
-          // Validate login result using site strategy
-          const loginSuccess = siteStrategy.validateLoginResult(apiResponses);
 
           const result = {
             index,

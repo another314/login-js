@@ -26,8 +26,22 @@ export class ZscanLoginStrategy extends BaseSiteLoginStrategy {
       }
     ],
     afterLogin: [
+      {
+        type: 'click',
+        selector: 'button[aria-label="bookmark"]',
+        value: undefined,
+        timeout: 5000,
+        url: undefined
+      },
+      {
+        type: 'wait',
+        selector: undefined,
+        value: undefined,
+        timeout: 5000,
+        url: undefined
+      }
     ],
-    waitAfterLogin: 2000,
+    waitAfterLogin: 5000,
     successIndicators: ["two_factor"],
     apiPatterns: ['/zero/api/login']
   };

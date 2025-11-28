@@ -60,15 +60,6 @@ export function createApp(): Express {
     await loginController.testLogin(req, res);
   }));
 
-  app.post('/api/login/batch', asyncHandler(async (req, res) => {
-    res.setHeader('Content-Type', 'text/event-stream');
-    res.setHeader('Cache-Control', 'no-cache');
-    res.setHeader('Connection', 'keep-alive');
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Access-Control-Allow-Headers', 'Cache-Control');
-
-    await loginController.testLoginBatch(req, res);
-  }));
 
   app.get('/api/sites', (_req, res) => {
     res.json({
@@ -161,24 +152,6 @@ export function createApp(): Express {
                 height: 'number'
               }
             }
-          }
-        },
-        batchLogin: {
-          method: 'POST',
-          url: '/api/login/batch',
-          body: {
-            requests: [
-              {
-                username: 'string',
-                password: 'string',
-                targetUrl: 'string',
-                actions: 'Array',
-                apiPattern: 'string (optional)',
-                proxy: 'Object (optional)',
-                options: 'Object (optional)'
-              }
-            ],
-            maxConcurrent: 'number (1-10)'
           }
         }
       }
