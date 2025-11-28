@@ -85,7 +85,20 @@ export class BrowserService {
           '--disable-images',
           '--disable-background-timer-throttling',
           '--disable-backgrounding-occluded-windows',
-          '--disable-renderer-backgrounding'
+          '--disable-renderer-backgrounding',
+          '--disable-extensions',
+          '--disable-plugins',
+          '--disable-default-apps',
+          '--disable-component-extensions-with-background-pages',
+          '--disable-features=TranslateUI,BlinkGenPropertyTrees',
+          '--disable-background-networking',
+          '--disable-sync',
+          '--metrics-recording-only',
+          '--disable-default-browser-check',
+          '--no-report-upload',
+          '--disable-permissions-api',
+          '--disable-web-security',
+          '--no-first-run'
         ]
       };
 
@@ -127,7 +140,7 @@ export class BrowserService {
       if (request.options?.viewport) {
         await page.setViewport(request.options.viewport);
       } else {
-        await page.setViewport({ width: 1920, height: 1080 });
+        await page.setViewport({ width: 1280, height: 720 });
       }
 
       // Authenticate proxy on the page if username and password are provided
@@ -185,17 +198,39 @@ export class BrowserService {
         }
       });
 
-      page.on('response', (response: any) => {
+      page.on('response', async (response: any) => {
         const url = response.url();
         if (url.includes(apiPattern)) {
-          apiResponses.push({
+          const apiResponse = {
             url: url,
             method: response.request().method(),
             status: response.status(),
             headers: response.headers(),
             body: null,
             timestamp: new Date().toISOString()
-          });
+          };
+
+          // Try to capture response body
+          try {
+            const contentType = response.headers()['content-type'] || '';
+            if (contentType.includes('application/json') ||
+                contentType.includes('text/') ||
+                !contentType) {
+
+              const responseText = await response.text();
+              if (responseText) {
+                try {
+                  apiResponse.body = JSON.parse(responseText);
+                } catch {
+                  apiResponse.body = responseText;
+                }
+              }
+            }
+          } catch (error) {
+            console.warn(`Failed to capture response body for ${url}:`, error);
+          }
+
+          apiResponses.push(apiResponse);
         }
       });
     }
@@ -205,7 +240,10 @@ export class BrowserService {
         switch (action.type) {
           case 'navigate':
             if (action.url) {
-              await page.goto(action.url, { waitUntil: 'networkidle2', timeout: action.timeout || 30000 });
+              await page.goto(action.url, {
+                waitUntil: 'domcontentloaded',
+                timeout: Math.min(action.timeout || 10000, 10000)
+              });
             }
             break;
 
@@ -224,7 +262,7 @@ export class BrowserService {
             break;
 
           case 'wait':
-            await new Promise(resolve => setTimeout(resolve, action.timeout || 1000));
+            await new Promise(resolve => setTimeout(resolve, Math.min(action.timeout || 300, 1000)));
             break;
         }
       } catch (error) {

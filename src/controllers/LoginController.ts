@@ -121,8 +121,9 @@ export class LoginController {
         logger.logLoginFailure(username, siteStrategy.config.name, 'Login verification failed', executionTime);
       }
 
-      // Return single JSON response
-      res.json(result);
+      // Return single JSON response with appropriate status code
+      const statusCode = loginSuccess ? 200 : 400;
+      res.status(statusCode).json(result);
 
       await this.browserService.closeSession(session.id);
 
