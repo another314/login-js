@@ -1,4 +1,4 @@
-import type { SiteLoginStrategy, SiteLoginConfig, LoginRequest, ElementAction, ApiResponse } from '../../types/index.js';
+import { type SiteLoginStrategy, type SiteLoginConfig, type LoginRequest, type ElementAction, type ApiResponse, ActionStageEnum, ApiPattern } from '../../types/index.js';
 
 export abstract class BaseSiteLoginStrategy implements SiteLoginStrategy {
   abstract readonly config: SiteLoginConfig;
@@ -15,13 +15,12 @@ export abstract class BaseSiteLoginStrategy implements SiteLoginStrategy {
       selector: undefined,
       value: undefined,
       timeout: undefined,
-      url: loginUrl
+      url: loginUrl,
+      stage: ActionStageEnum.before
     });
     
     // Add before login actions (custom or site-specific)
-    if (request.beforeLogin && request.beforeLogin.length > 0) {
-      actions.push(...request.beforeLogin);
-    } else if (this.config.beforeLogin && this.config.beforeLogin.length > 0) {
+    if (this.config.beforeLogin && this.config.beforeLogin.length > 0) {
       actions.push(...this.config.beforeLogin);
     }
     
@@ -32,7 +31,8 @@ export abstract class BaseSiteLoginStrategy implements SiteLoginStrategy {
         selector,
         value: request.username,
         timeout: 5000,
-        url: undefined
+        url: undefined,
+        stage: ActionStageEnum.login
       });
     }
 
@@ -43,7 +43,8 @@ export abstract class BaseSiteLoginStrategy implements SiteLoginStrategy {
         selector,
         value: request.password,
         timeout: 5000,
-        url: undefined
+        url: undefined,
+        stage: ActionStageEnum.login
       });
     }
 
@@ -52,7 +53,8 @@ export abstract class BaseSiteLoginStrategy implements SiteLoginStrategy {
       selector: undefined,
       value: undefined,
       timeout: 500,
-      url: undefined
+      url: undefined,
+      stage: ActionStageEnum.login
     });
 
     // Try to click submit button
@@ -62,23 +64,12 @@ export abstract class BaseSiteLoginStrategy implements SiteLoginStrategy {
         selector,
         value: undefined,
         timeout: 5000,
-        url: undefined
+        url: undefined,
+        stage: ActionStageEnum.login
       });
     }
 
-    // Wait after login
-    actions.push({
-      type: 'wait',
-      selector: undefined,
-      value: undefined,
-      timeout: this.config.waitAfterLogin || 3000,
-      url: undefined
-    });
-
-    // Add after login actions (custom or site-specific)
-    if (request.afterLogin && request.afterLogin.length > 0) {
-      actions.push(...request.afterLogin);
-    } else if (this.config.afterLogin && this.config.afterLogin.length > 0) {
+    if (this.config.afterLogin && this.config.afterLogin.length > 0) {
       actions.push(...this.config.afterLogin);
     }
 
@@ -104,7 +95,7 @@ export abstract class BaseSiteLoginStrategy implements SiteLoginStrategy {
     return false;
   }
 
-  getApiPatterns(): string[] {
+  getApiPatterns(): ApiPattern[] {
     return this.config.apiPatterns || [];
   }
 }

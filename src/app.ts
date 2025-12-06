@@ -57,7 +57,7 @@ export function createApp(): Express {
   }));
 
   app.post('/api/login/test', asyncHandler(async (req, res) => {
-    await loginController.testLogin(req, res);
+    await loginController.autoLogin(req, res);
   }));
 
 

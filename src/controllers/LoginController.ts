@@ -1,47 +1,62 @@
-import { Request, Response } from 'express';
-import { z } from 'zod';
-import { BrowserService } from '../services/BrowserService.js';
-import { SiteFactory } from '../services/sites/index.js';
-import { v4 as uuidv4 } from 'uuid';
-import { logger } from '../utils/logger.js';
+import { Request, Response } from "express";
+import { z } from "zod";
+import { BrowserService } from "../services/BrowserService.js";
+import { SiteFactory } from "../services/sites/index.js";
+import { v4 as uuidv4 } from "uuid";
+import { logger } from "../utils/logger.js";
+import { ApiPatternEnum, ApiResponse } from "../types/index.js";
 
 const LoginRequestSchema = z.object({
-  username: z.string().min(1, 'Username is required'),
-  password: z.string().min(1, 'Password is required'),
-  targetUrl: z.string().url('Invalid target URL').optional(),
+  username: z.string().min(1, "Username is required"),
+  password: z.string().min(1, "Password is required"),
+  targetUrl: z.string().url("Invalid target URL").optional(),
   site: z.string().optional(),
-  beforeLogin: z.array(z.object({
-    type: z.enum(['navigate', 'click', 'input', 'wait']),
-    selector: z.string(),
-    value: z.string(),
-    timeout: z.number(),
-    url: z.string()
-  })).optional(),
-  afterLogin: z.array(z.object({
-    type: z.enum(['navigate', 'click', 'input', 'wait']),
-    selector: z.string(),
-    value: z.string(),
-    timeout: z.number(),
-    url: z.string()
-  })).optional(),
+  beforeLogin: z
+    .array(
+      z.object({
+        type: z.enum(["navigate", "click", "input", "wait"]),
+        selector: z.string(),
+        value: z.string(),
+        timeout: z.number(),
+        url: z.string(),
+      })
+    )
+    .optional(),
+  afterLogin: z
+    .array(
+      z.object({
+        type: z.enum(["navigate", "click", "input", "wait"]),
+        selector: z.string(),
+        value: z.string(),
+        timeout: z.number(),
+        url: z.string(),
+      })
+    )
+    .optional(),
   apiPattern: z.string().optional(),
-  proxy: z.object({
-    enabled: z.boolean().default(true),
-    protocol: z.enum(['http', 'https', 'socks5']).default('http'),
-    host: z.string().optional(),
-    port: z.number().optional(),
-    username: z.string().optional(),
-    password: z.string().optional()
-  }).optional(),
-  options: z.object({
-    headless: z.boolean().default(true),
-    timeout: z.number().default(30000),
-    userAgent: z.string().optional(),
-    viewport: z.object({
-      width: z.number().default(1920),
-      height: z.number().default(1080)
-    }).optional()
-  }).optional()
+  proxy: z
+    .object({
+      enabled: z.boolean().default(true),
+      protocol: z.enum(["http", "https", "socks5"]).default("http"),
+      host: z.string().optional(),
+      port: z.number().optional(),
+      username: z.string().optional(),
+      password: z.string().optional(),
+    })
+    .optional(),
+  options: z
+    .object({
+      headless: z.boolean().default(true),
+      timeout: z.number().default(30000),
+      userAgent: z.string().optional(),
+      viewport: z
+        .object({
+          width: z.number().default(1920),
+          height: z.number().default(1080),
+        })
+        .optional(),
+    })
+    .optional(),
 });
 
 export class LoginController {
@@ -51,18 +66,29 @@ export class LoginController {
     this.browserService = new BrowserService(proxyStrings);
   }
 
-  async testLogin(req: Request, res: Response): Promise<void> {
+  async autoLogin(req: Request, res: Response): Promise<void> {
     const startTime = Date.now();
-
+    let session = null;
     try {
       const validatedData = LoginRequestSchema.parse(req.body);
-      const { username, password, targetUrl, site, beforeLogin, afterLogin, apiPattern, proxy, options } = validatedData;
+      const {
+        username,
+        password,
+        targetUrl,
+        site,
+        beforeLogin,
+        afterLogin,
+        proxy,
+        options,
+      } = validatedData;
 
       // Log login attempt
       logger.logLoginAttempt(username, password, site);
 
       // Determine login strategy
-      const siteStrategy = site ? SiteFactory.getSiteStrategy(site) : SiteFactory.getSiteStrategy('generic');
+      const siteStrategy = site
+        ? SiteFactory.getSiteStrategy(site)
+        : SiteFactory.getSiteStrategy("generic");
 
       logger.debug(`Using site strategy: ${siteStrategy.config.name}`);
 
@@ -74,66 +100,66 @@ export class LoginController {
         beforeLogin: beforeLogin || undefined,
         afterLogin: afterLogin || undefined,
         proxy: proxy || undefined,
-        options: options || undefined
+        options: options || undefined,
       };
 
-      const session = await this.browserService.createSession(loginRequest);
+      session = await this.browserService.createSession(loginRequest);
 
       // Log browser session creation
-      logger.logBrowserSession(session.id, proxy ? `${proxy.host}:${proxy.port}` : undefined);
+      logger.logBrowserSession(
+        session.id,
+        proxy ? `${proxy.host}:${proxy.port}` : undefined
+      );
 
       // Generate actions using site strategy
       const generatedActions = siteStrategy.generateLoginActions(loginRequest);
       const apiPatterns = siteStrategy.getApiPatterns();
 
-      logger.info(`Executing ${generatedActions.length} login actions...`);
+      const apiResponses: ApiResponse[] = [];
+      const requestUrls: ApiPatternEnum[] = [];
 
-      const { apiResponses, afterLoginActions } = await this.browserService.executeActions(
+      logger.info(`Executing ${generatedActions.length} login actions...`);
+      await this.browserService.executeActions(
         session,
         generatedActions,
-        apiPattern || apiPatterns.length > 0 ? apiPatterns[0] : undefined
+        apiPatterns,
+        requestUrls,
+        apiResponses
       );
 
-      // Log API responses captured
-      apiResponses.forEach(response => {
-        logger.logApiCapture(response.url, response.method, response.status);
-      });
 
       // Validate login result using site strategy
-      const validationSuccess = siteStrategy.validateLoginResult(apiResponses);
-      const loginSuccess = validationSuccess;
-
-      // Only execute after-login actions if login was successful
-      if (loginSuccess && afterLoginActions.length > 0) {
-        console.log('Login validation successful, executing after-login actions...');
-        const additionalApiResponses = await this.browserService.executeAfterLoginActions(session, afterLoginActions, apiPatterns);
-
-        // Add new API responses to the existing ones
-        apiResponses.push(...additionalApiResponses);
-
-        // Log additional API responses captured
-        additionalApiResponses.forEach(response => {
-          logger.logApiCapture(response.url, response.method, response.status);
-        });
-      }
-
+      const loginSuccess = siteStrategy.validateLoginResult(apiResponses);
       const executionTime = Date.now() - startTime;
 
       const result = {
         success: loginSuccess,
         sessionId: session.id,
-        message: loginSuccess ? 'Login successful' : 'Login verification failed',
+        message: loginSuccess
+          ? "Login successful"
+          : "Login verification failed",
         site: siteStrategy.config.name,
         apiResponses,
         executionTime,
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
       };
 
       // Log result
       if (loginSuccess) {
-        logger.logLoginSuccess(username, siteStrategy.config.name, session.id, apiResponses, executionTime);
+        logger.logLoginSuccess(
+          username,
+          siteStrategy.config.name,
+          session.id,
+          apiResponses,
+          executionTime
+        );
       } else {
-        logger.logLoginFailure(username, siteStrategy.config.name, 'Login verification failed', executionTime);
+        logger.logLoginFailure(
+          username,
+          siteStrategy.config.name,
+          "Login verification failed",
+          executionTime
+        );
       }
 
       // Return single JSON response with appropriate status code
@@ -141,19 +167,19 @@ export class LoginController {
       res.status(statusCode).json(result);
 
       await this.browserService.closeSession(session.id);
-
     } catch (error) {
       const executionTime = Date.now() - startTime;
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
-      const username = req.body?.username || 'unknown';
-      const site = req.body?.site || 'unknown';
+      const errorMessage =
+        error instanceof Error ? error.message : "Unknown error occurred";
+      const username = req.body?.username || "unknown";
+      const site = req.body?.site || "unknown";
 
       // Log error
       logger.error(`Login test failed for ${username}`, {
         error: errorMessage,
         executionTime,
         site,
-        stack: error instanceof Error ? error.stack : undefined
+        stack: error instanceof Error ? error.stack : undefined,
       });
 
       const errorResult = {
@@ -162,136 +188,14 @@ export class LoginController {
         message: errorMessage,
         apiResponses: [],
         executionTime,
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
       };
 
       // Return single JSON error response
       res.status(500).json(errorResult);
-    }
-  }
-
-  async testLoginBatch(req: Request, res: Response): Promise<void> {
-    const BatchRequestSchema = z.object({
-      requests: z.array(LoginRequestSchema).min(1, 'At least one request is required'),
-      maxConcurrent: z.number().min(1).max(10).default(3)
-    });
-
-    try {
-      const { requests } = BatchRequestSchema.parse(req.body);
-
-      res.setHeader('Content-Type', 'text/event-stream');
-      res.setHeader('Cache-Control', 'no-cache');
-      res.setHeader('Connection', 'keep-alive');
-
-      console.log(`data: ${JSON.stringify({ type: 'status', message: `Starting batch test with ${requests.length} requests...` })}\n\n`);
-
-      const results: any[] = [];
-
-      const executeRequest = async (requestData: any, index: number) => {
-        const startTime = Date.now();
-
-        try {
-          console.log(`data: ${JSON.stringify({ type: 'status', message: `Processing request ${index + 1}/${requests.length}...` })}\n\n`);
-
-          // Determine site strategy for this request
-          const siteStrategy = requestData.site ?
-            SiteFactory.getSiteStrategy(requestData.site) :
-            SiteFactory.getSiteStrategy('generic');
-
-          const session = await this.browserService.createSession(requestData);
-
-          // Generate actions using site strategy
-          const generatedActions = siteStrategy.generateLoginActions(requestData);
-          const apiPatterns = siteStrategy.getApiPatterns();
-
-          const { apiResponses, afterLoginActions } = await this.browserService.executeActions(
-            session,
-            generatedActions,
-            requestData.apiPattern || (apiPatterns.length > 0 ? apiPatterns[0] : undefined)
-          );
-
-          // Validate login result using site strategy
-          const validationSuccess = siteStrategy.validateLoginResult(apiResponses);
-          const loginSuccess = validationSuccess;
-
-          // Only execute after-login actions if login was successful
-          if (loginSuccess && afterLoginActions.length > 0) {
-            console.log('Login validation successful, executing after-login actions...');
-            const additionalApiResponses = await this.browserService.executeAfterLoginActions(session, afterLoginActions, apiPatterns);
-
-            // Add new API responses to the existing ones
-            apiResponses.push(...additionalApiResponses);
-          }
-
-          const screenshot = await this.browserService.takeScreenshot(session);
-          const executionTime = Date.now() - startTime;
-
-          const result = {
-            index,
-            success: loginSuccess,
-            sessionId: session.id,
-            message: loginSuccess ? 'Login successful' : 'Login verification failed',
-            site: siteStrategy.config.name,
-            apiResponses,
-            screenshot,
-            executionTime,
-            timestamp: new Date().toISOString()
-          };
-
-          results.push(result);
-
-          console.log(`data: ${JSON.stringify({ type: 'progress', result })}\n\n`);
-
-          await this.browserService.closeSession(session.id);
-
-          return result;
-
-        } catch (error) {
-          const executionTime = Date.now() - startTime;
-          const errorResult = {
-            index,
-            success: false,
-            sessionId: uuidv4(),
-            message: error instanceof Error ? error.message : 'Unknown error occurred',
-            apiResponses: [],
-            executionTime,
-            timestamp: new Date().toISOString()
-          };
-
-          results.push(errorResult);
-
-          console.log(`data: ${JSON.stringify({ type: 'progress', result: errorResult })}\n\n`);
-
-          return errorResult;
-        }
-      };
-
-      const promises = requests.map((requestData, index) =>
-        executeRequest(requestData, index)
-      );
-
-      await Promise.all(promises);
-
-      const summary = {
-        totalRequests: requests.length,
-        successfulRequests: results.filter(r => r.success).length,
-        failedRequests: results.filter(r => !r.success).length,
-        averageExecutionTime: results.reduce((sum, r) => sum + r.executionTime, 0) / results.length,
-        results
-      };
-
-      console.log(`data: ${JSON.stringify({ type: 'complete', result: summary })}\n\n`);
-      res.end();
-
-    } catch (error) {
-      const errorResult = {
-        success: false,
-        message: error instanceof Error ? error.message : 'Unknown error occurred',
-        timestamp: new Date().toISOString()
-      };
-
-      console.log(`data: ${JSON.stringify({ type: 'error', result: errorResult })}\n\n`);
-      res.end();
+      if (session) {
+        await this.browserService.closeSession(session.id);
+      }
     }
   }
 
@@ -302,12 +206,13 @@ export class LoginController {
       res.json({
         activeSessions,
         timestamp: new Date().toISOString(),
-        status: 'healthy'
+        status: "healthy",
       });
     } catch (error) {
       res.status(500).json({
-        error: error instanceof Error ? error.message : 'Unknown error occurred',
-        timestamp: new Date().toISOString()
+        error:
+          error instanceof Error ? error.message : "Unknown error occurred",
+        timestamp: new Date().toISOString(),
       });
     }
   }

@@ -1,3 +1,15 @@
+export enum ApiPatternEnum {
+  login,
+  bookmark,
+  history
+}
+
+export enum ActionStageEnum {
+  before,
+  login,
+  after
+}
+
 export interface ProxyConfig {
   enabled: boolean;
   host?: string;
@@ -13,8 +25,6 @@ export interface LoginRequest {
   targetUrl?: string;
   site?: string;
   proxy?: ProxyConfig;
-  beforeLogin?: ElementAction[];
-  afterLogin?: ElementAction[];
   options?: {
     headless?: boolean | 'new' | 'old';
     timeout?: number;
@@ -30,7 +40,7 @@ export interface LoginRequest {
 }
 
 export interface ElementAction {
-  type: 'click' | 'input' | 'wait' | 'navigate' | 'api';
+  type: 'click' | 'input' | 'wait' | 'navigate' | 'api' | 'waitApi';
   selector: string | undefined;
   value: string | undefined;
   timeout: number | undefined;
@@ -38,15 +48,22 @@ export interface ElementAction {
   apiUrl?: string;
   apiMethod?: 'GET' | 'POST' | 'PUT' | 'DELETE';
   apiHeaders?: Record<string, string>;
+  stage: ActionStageEnum;
 }
 
 export interface ApiResponse {
   url: string;
+  name: ApiPatternEnum;
   method: string;
   status: number;
   headers: Record<string, string>;
   body: any;
   timestamp: string;
+}
+
+export interface ApiPattern {
+  name: ApiPatternEnum;
+  pattern: string;
 }
 
 export interface LoginResult {
@@ -78,7 +95,7 @@ export interface SiteLoginConfig {
   };
   beforeLogin?: ElementAction[];
   afterLogin?: ElementAction[];
-  apiPatterns?: string[];
+  apiPatterns?: ApiPattern[];
   waitAfterLogin?: number;
   successIndicators?: string[];
 }
@@ -87,7 +104,7 @@ export interface SiteLoginStrategy {
   readonly config: SiteLoginConfig;
   generateLoginActions(request: LoginRequest): ElementAction[];
   validateLoginResult(apiResponses: ApiResponse[]): boolean;
-  getApiPatterns(): string[];
+  getApiPatterns(): ApiPattern[];
 }
 
 export interface TestConfig {
